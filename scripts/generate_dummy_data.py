@@ -140,16 +140,17 @@ def _inject_benchmarks(sessions):
             "pain_reported": False,
         })
 
-    # 4) 유산소 상호작용 위반: 최근 하체 세션에 당일 고강도 유산소 40분 추가
-    squat_recent = [s for s in sessions if s["exercise"] == "스쿼트"]
-    if squat_recent:
-        target = squat_recent[-4] if len(squat_recent) >= 4 else squat_recent[0]
+    # 4) 유산소 상호작용 위반: 정체(스쿼트)와 겹치지 않도록 힙스러스트 세션에 당일 고강도 유산소 40분 추가
+    hip_thrust_recent = [s for s in sessions if s["exercise"] == "힙스러스트"]
+    if hip_thrust_recent:
+        target = hip_thrust_recent[-4] if len(hip_thrust_recent) >= 4 else hip_thrust_recent[0]
         target["same_day_cardio_minutes"] = 40
         target["cardio_intensity"] = "high"
 
-    # 5) 통증 호소: 최근 상체(벤치프레스) 세션 중 하나에 통증 플래그
-    if len(bench_sessions) >= 4:
-        pain_session = bench_sessions[-4]
+    # 5) 통증 호소: 정상진행(벤치프레스)과 겹치지 않도록 숄더프레스에 통증 플래그
+    shoulder_sessions = [s for s in sessions if s["exercise"] == "숄더프레스" and s["date"] >= recent_cutoff]
+    if shoulder_sessions:
+        pain_session = shoulder_sessions[-1]
         pain_session["pain_reported"] = True
         pain_session["note"] = "어깨 앞쪽 통증 호소"
 
@@ -189,10 +190,12 @@ def build_body_composition():
 
 
 MEAL_POOL = {
-    "breakfast": [("계란 2개 + 토스트", 350), ("그릭요거트 + 그래놀라", 300), ("바나나 + 두유", 250)],
-    "lunch": [("닭가슴살 샐러드", 450), ("현미밥 + 제육볶음", 700), ("연어 포케", 550)],
-    "dinner": [("두부 김치찌개 + 밥", 600), ("소고기 야채볶음", 650), ("고등어구이 + 나물", 500)],
-    "snack": [("아몬드 한줌", 150), ("사과 1개", 100), ("프로틴 쉐이크", 180)],
+    # 슬롯당 kcal을 상향해 평범한 날 합계가 이 프로필(164cm/60kg/30세/여성)의
+    # TDEE(약 1800kcal) 근처인 2000kcal 안팎이 되도록 조정
+    "breakfast": [("계란 2개 + 토스트", 450), ("그릭요거트 + 그래놀라", 400), ("바나나 + 두유", 380)],
+    "lunch": [("닭가슴살 샐러드", 600), ("현미밥 + 제육볶음", 850), ("연어 포케", 700)],
+    "dinner": [("두부 김치찌개 + 밥", 750), ("소고기 야채볶음", 800), ("고등어구이 + 나물", 650)],
+    "snack": [("아몬드 한줌", 200), ("사과 1개", 150), ("프로틴 쉐이크", 230)],
 }
 
 

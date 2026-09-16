@@ -7322,8 +7322,8 @@
     ],
     "soreness_before_session": "mild",
     "hours_since_last_same_category": 168,
-    "same_day_cardio_minutes": 40,
-    "cardio_intensity": "high",
+    "same_day_cardio_minutes": 0,
+    "cardio_intensity": null,
     "pain_reported": false
   },
   {
@@ -7339,8 +7339,8 @@
     ],
     "soreness_before_session": "mild",
     "hours_since_last_same_category": 168,
-    "same_day_cardio_minutes": 0,
-    "cardio_intensity": null,
+    "same_day_cardio_minutes": 40,
+    "cardio_intensity": "high",
     "pain_reported": false
   },
   {
@@ -7375,8 +7375,7 @@
     "hours_since_last_same_category": 168,
     "same_day_cardio_minutes": 0,
     "cardio_intensity": null,
-    "pain_reported": true,
-    "note": "어깨 앞쪽 통증 호소"
+    "pain_reported": false
   },
   {
     "date": "2026-08-24",
@@ -7869,6 +7868,7 @@
     "hours_since_last_same_category": 168,
     "same_day_cardio_minutes": 0,
     "cardio_intensity": null,
-    "pain_reported": false
+    "pain_reported": true,
+    "note": "어깨 앞쪽 통증 호소"
   }
 ]

@@ -14,3 +14,6 @@ chroma_db/
 # OS
 .DS_Store
 Thumbs.db
+
+# 개인 학습용 메모 (제출 대상 아님)
+STUDY_NOTES.md
