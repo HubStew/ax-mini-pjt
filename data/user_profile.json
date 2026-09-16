@@ -4,5 +4,6 @@
   "age": 30,
   "gender": "female",
   "goal": "maintain",
-  "target_muscle_mass_kg": 24
+  "target_muscle_mass_kg": 24,
+  "activity_level": "moderate"
 }

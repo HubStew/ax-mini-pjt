@@ -83,7 +83,7 @@ evaluation/         test_queries.csv, round1_report.md, round2_report.md
 - `data/training_guidelines.md` — 운동 가이드라인 (RAG 소스)
 - `data/nutrition_guidelines.md` — 영양 가이드라인 (RAG 소스)
 - 운동 기록(9종목 × 1년치, 더미) · 식단 기록(1년치, 더미) · 체지방률/근육량(월 1회, 더미)
-  · 사용자 프로필(키·몸무게·나이·성별·목표) — 전부 더미로 진행, 실제 데이터 연동은
+  · 사용자 프로필(키·몸무게·나이·성별·목표·활동수준) — 전부 더미로 진행, 실제 데이터 연동은
   이번 스코프 밖
 
 ## 반드시 해야 할 것

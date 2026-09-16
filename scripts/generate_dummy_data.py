@@ -35,6 +35,7 @@ def build_profile():
         "gender": "female",
         "goal": "maintain",
         "target_muscle_mass_kg": 24,
+        "activity_level": "moderate",
     }
 
 
