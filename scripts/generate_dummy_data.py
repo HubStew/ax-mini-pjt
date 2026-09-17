@@ -13,6 +13,7 @@ from pathlib import Path
 random.seed(42)
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+DUMMY_DIR = DATA_DIR / "dummy"
 
 END_DATE = date(2026, 9, 14)  # 최근 월요일
 NUM_WEEKS = 52
@@ -238,23 +239,23 @@ def build_diet_log():
 
 
 def main():
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DUMMY_DIR.mkdir(parents=True, exist_ok=True)
 
     profile = build_profile()
     workouts = build_workout_history()
     body_comp = build_body_composition()
     diet = build_diet_log()
 
-    (DATA_DIR / "user_profile.json").write_text(
+    (DUMMY_DIR / "user_profile.json").write_text(
         json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (DATA_DIR / "workout_history.json").write_text(
+    (DUMMY_DIR / "workout_history.json").write_text(
         json.dumps(workouts, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (DATA_DIR / "body_composition.json").write_text(
+    (DUMMY_DIR / "body_composition.json").write_text(
         json.dumps(body_comp, ensure_ascii=False, indent=2), encoding="utf-8"
     )
-    (DATA_DIR / "diet_log.json").write_text(
+    (DUMMY_DIR / "diet_log.json").write_text(
         json.dumps(diet, ensure_ascii=False, indent=2), encoding="utf-8"
     )
 

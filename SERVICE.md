@@ -18,7 +18,7 @@
 ## 3. 사용 예상 도구·데이터
 - 도구 (1차, MVP — 구현 완료)
   - `retrieve_guideline` — 공개 운동 가이드라인 문서 검색 (점진적 과부하 원칙)
-  - `get_workout_history` — 과거 운동 세션 기록 조회 (`data/workout_history.json` 직접 조회)
+  - `get_workout_history` — 과거 운동 세션 기록 조회 (`data/dummy/workout_history.json` 직접 조회)
   - `get_diet_history` — 과거 식단 기록·체지방/근육량 추세 조회
   - `calc_macro` — 칼로리/매크로 계산
   - `update_user_profile` — 몸무게 등 프로필 업데이트 (파일 하나 갱신 수준이라 MVP에 포함)

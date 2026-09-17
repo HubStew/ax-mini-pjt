@@ -15,7 +15,9 @@ src/agent.py       Supervisor + workout_agent + diet_agent 그래프
 src/tools.py        도메인 도구 (retrieve_guideline, get_workout_history,
                     get_diet_history, calc_macro 등)
 src/retriever.py    RAG 파이프라인 (Chroma + BedrockEmbeddings)
-data/               training_guidelines.md, nutrition_guidelines.md, 더미 데이터
+data/               training_guidelines.md, nutrition_guidelines.md, query_synonyms.json
+data/dummy/         더미데이터 (user_profile.json, workout_history.json,
+                    diet_log.json, body_composition.json)
 evaluation/         test_queries.csv, round1_report.md, round2_report.md
 ```
 
@@ -76,7 +78,7 @@ evaluation/         test_queries.csv, round1_report.md, round2_report.md
 - 개인 신체정보(키·몸무게·나이·운동/식단 기록 등)는 외부로 전송·공유하지 않는다
 
 ## 장기 메모리 (구현 방식)
-- 운동/식단 기록, 체지방률/근육량, 프로필은 `data/*.json` 파일을 도구
+- 운동/식단 기록, 체지방률/근육량, 프로필은 `data/dummy/*.json` 파일을 도구
   (`get_workout_history`, `get_diet_history`, `calc_macro`, `update_user_profile`)가
   직접 읽고 쓰는 방식으로 구현했다 — 이 조회 함수들이 "장기 메모리" 역할을 대신한다
   (서버를 재시작해도 파일에 남아있으니 유지됨)
@@ -87,8 +89,9 @@ evaluation/         test_queries.csv, round1_report.md, round2_report.md
 ## 데이터
 - `data/training_guidelines.md` — 운동 가이드라인 (RAG 소스)
 - `data/nutrition_guidelines.md` — 영양 가이드라인 (RAG 소스)
-- 운동 기록(9종목 × 1년치, 더미) · 식단 기록(1년치, 더미) · 체지방률/근육량(월 1회, 더미)
-  · 사용자 프로필(키·몸무게·나이·성별·목표·활동수준) — 전부 더미로 진행, 실제 데이터 연동은
+- `data/query_synonyms.json` — 쿼리 확장용 동의어 사전
+- `data/dummy/` — 운동 기록(9종목 × 1년치) · 식단 기록(1년치) · 체지방률/근육량
+  (월 1회) · 사용자 프로필(키·몸무게·나이·성별·목표·활동수준) — 전부 더미로 진행, 실제 데이터 연동은
   이번 스코프 밖
 
 ## 반드시 해야 할 것

@@ -1,6 +1,6 @@
 """workout_agent·diet_agent가 쓰는 도구들.
 
-데이터는 전부 data/*.json을 직접 읽는다 (이번 스코프의 "장기 메모리"는 이
+데이터는 전부 data/dummy/*.json을 직접 읽는다 (이번 스코프의 "장기 메모리"는 이
 조회 함수들이 대신한다 — LangGraph Store 이관은 후순위).
 """
 import json
@@ -12,11 +12,11 @@ from langchain_core.tools import tool
 from retriever import retrieve_guideline as _retrieve_guideline
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DUMMY_DIR = BASE_DIR / "data" / "dummy"
 
 
 def _load_json(name: str):
-    return json.loads((DATA_DIR / name).read_text(encoding="utf-8"))
+    return json.loads((DUMMY_DIR / name).read_text(encoding="utf-8"))
 
 
 @tool
@@ -209,7 +209,7 @@ def update_user_profile(field: str, value: str) -> str:
         value_to_store = value
 
     profile[field] = value_to_store
-    (DATA_DIR / "user_profile.json").write_text(
+    (DUMMY_DIR / "user_profile.json").write_text(
         json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     return f"{field}를 {value}로 업데이트했습니다."
