@@ -17,8 +17,15 @@
 ## 폴더 구조 (제출 규약. 바꾸지 않는다)
 ```
 src/agent.py       Supervisor + workout_agent + diet_agent 그래프
+src/prompts/        workout_agent/diet_agent 시스템 프롬프트의 공통 부분
+                    (검색 필수 규칙, 공통 가드레일) + SUPERVISOR_PROMPT.
+                    도메인 전용 판단 규칙은 그대로 agent.py에 남아있고,
+                    두 에이전트가 겹치는 문구만 함수로 뽑아 여기서 공유한다.
+                    프롬프트 변경 이력은 별도 버전 파일 없이 git 커밋 로그로
+                    관리한다
 src/tools.py        도메인 도구 (retrieve_guideline, get_workout_history,
-                    get_diet_history, calc_macro 등)
+                    get_diet_history, calc_macro, get_user_profile,
+                    update_user_profile 등)
 src/retriever.py    RAG 파이프라인 (Chroma + BedrockEmbeddings)
 data/               training_guidelines.md, nutrition_guidelines.md, query_synonyms.json
 data/dummy/         더미데이터 (user_profile.json, workout_history.json,
@@ -87,9 +94,10 @@ evaluation/         test_queries.csv, round1_report.md, round2_report.md
 
 ## 장기 메모리 (구현 방식)
 - 운동/식단 기록, 체지방률/근육량, 프로필은 `data/dummy/*.json` 파일을 도구
-  (`get_workout_history`, `get_diet_history`, `calc_macro`, `update_user_profile`)가
-  직접 읽고 쓰는 방식으로 구현했다 — 이 조회 함수들이 "장기 메모리" 역할을 대신한다
-  (서버를 재시작해도 파일에 남아있으니 유지됨)
+  (`get_workout_history`, `get_diet_history`, `calc_macro`, `get_user_profile`,
+  `update_user_profile`)가 직접 읽고 쓰는 방식으로 구현했다 — 이 조회 함수들이
+  "장기 메모리" 역할을 대신한다 (서버를 재시작해도 파일에 남아있으니 유지됨).
+  프로필 조회는 `get_user_profile`, 갱신은 `update_user_profile`로 나뉜다
 - LangGraph Store로의 이관은 이번 스코프에 넣지 않았다 (시간이 남으면 후순위)
 - 오래된 기록 중 같은 무게가 반복되는 구간을 주간 요약으로 압축하는 것도 후순위
   (현재 더미데이터는 압축 없이 그대로 저장돼 있음)

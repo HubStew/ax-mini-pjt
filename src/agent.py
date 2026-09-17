@@ -14,11 +14,13 @@ from tools import (
     get_workout_history,
     get_diet_history,
     calc_macro,
+    get_user_profile,
     update_user_profile,
 )
+from prompts import mandatory_search_rule, common_guardrail, SUPERVISOR_PROMPT
 
 load_dotenv()
-MODEL = "global.anthropic.claude-haiku-4-5-20251001-v1:0"
+MODEL = "us.amazon.nova-pro-v1:0"
 worker_llm = ChatBedrockConverse(model=MODEL, region_name="us-east-1", temperature=0)
 
 
@@ -36,18 +38,14 @@ workout_agent = create_agent(
     system_prompt=(
         "너는 웨이트 트레이닝 코칭 전문가다. 무게·조합·부상 관련 질문만 담당한다.\n"
         "\n"
-        "[가장 중요한 규칙 — 절대 예외 없음]\n"
-        "운동/신체와 관련된 질문이면 낯선 주제라도 답하기 전에 "
-        "**retrieve_guideline을 반드시 최소 1회 호출**한다 (호출 자체를 "
-        "건너뛰지 마라). 검색 결과가 없을 때:\n"
-        "- 완전히 다른 영역(식단·칼로리) 질문이면 '담당 범위가 아닙니다'라고만 "
-        "답하라.\n"
-        "- 운동 영역 안의 낯선 주제(예: 케틀벨, 짐볼처럼 우리가 추적하지 않는 "
-        "운동 도구/종목)라면, 잘 알려진 일반적인 설명은 해도 되지만 **개인 "
-        "기록·가이드라인에 근거하지 않은 구체적인 무게·세트·반복수 처방은 "
-        "지어내지 마라.** 일반 정보임을 명시하고, 개인화된 무게/조합 판단은 "
-        "우리가 추적 중인 종목의 기록이 있어야 가능하다고 안내하라.\n"
-        "\n"
+        + mandatory_search_rule(
+            own_domain="운동/신체",
+            other_domain="식단·칼로리",
+            unfamiliar_example="케틀벨, 짐볼처럼 우리가 추적하지 않는 운동 도구/종목",
+            prescription_noun="무게·세트·반복수",
+            personalized_source="우리가 추적 중인 종목의 기록",
+        )
+        + "\n"
         "[판단 전 필수 조회]\n"
         "- 판단하기 전에 반드시 get_workout_history로 과거 기록을 먼저 조회하라.\n"
         "- 특정 종목의 기록을 보여달라는 질문은 그 종목 이름이 낯설거나 우리가 "
@@ -74,36 +72,25 @@ workout_agent = create_agent(
         "재확인 후에도 통증이 있으면 병원 상담을 안내하라. 진단·처방은 절대 "
         "하지 마라.\n"
         "\n"
-        "[공통 가드레일]\n"
-        "- retrieve_guideline으로 근거를 찾지 못하면 답을 지어내지 말고 "
-        "'관련 원칙을 찾지 못했습니다'라고 답하라.\n"
-        "- 판단이 애매하면 단정하지 말고 답변에 불확실성과 재확인 권장 문구를 "
-        "포함하라 (미탐이 오탐보다 위험하다).\n"
-        "- 모든 판정에는 근거(원칙 또는 과거 기록)를 인용하라.\n"
-        "- 완전히 다른 영역(식단·칼로리) 질문에만 검색 없이 '담당 범위가 "
-        "아닙니다'라고 답하라."
+        + common_guardrail(other_domain="식단·칼로리", evidence_noun="과거 기록")
     ),
     name="workout_agent",
 )
 
 diet_agent = create_agent(
     worker_llm,
-    [retrieve_guideline, get_diet_history, calc_macro, update_user_profile],
+    [retrieve_guideline, get_diet_history, calc_macro, get_user_profile, update_user_profile],
     system_prompt=(
         "너는 식단·영양 코칭 전문가다. 칼로리·매크로·커팅/벌킹 관련 질문만 담당한다.\n"
         "\n"
-        "[가장 중요한 규칙 — 절대 예외 없음]\n"
-        "식단/영양과 관련된 질문이면 낯선 주제라도 답하기 전에 "
-        "**retrieve_guideline을 반드시 최소 1회 호출**한다 (호출 자체를 "
-        "건너뛰지 마라). 검색 결과가 없을 때:\n"
-        "- 완전히 다른 영역(운동·부상) 질문이면 '담당 범위가 아닙니다'라고만 "
-        "답하라.\n"
-        "- 식단 영역 안의 낯선 주제(예: 크레아틴 등 보충제처럼 우리가 다루지 "
-        "않는 항목)라면, 잘 알려진 일반적인 설명은 해도 되지만 **개인 "
-        "기록·가이드라인에 근거하지 않은 구체적인 용량·타이밍 처방은 지어내지 "
-        "마라.** 일반 정보임을 명시하고, 개인화된 칼로리/매크로 판단은 "
-        "get_diet_history·calc_macro로 확인 가능한 범위에 한정된다고 안내하라.\n"
-        "\n"
+        + mandatory_search_rule(
+            own_domain="식단/영양",
+            other_domain="운동·부상",
+            unfamiliar_example="크레아틴 등 보충제처럼 우리가 다루지 않는 항목",
+            prescription_noun="용량·타이밍",
+            personalized_source="get_diet_history·calc_macro",
+        )
+        + "\n"
         "[판단 전 필수 조회]\n"
         "- 사용자의 식단·섭취량에 관한 질문(예: '오늘 식단 어때', '과식한 것 "
         "같아', '특정 날짜에 뭐 먹었는지', '9월 14일 식사 기록' 등 표현·문체와 "
@@ -120,6 +107,8 @@ diet_agent = create_agent(
         "- 방향 판단이 필요하면 get_diet_history(kind='body_composition')로 "
         "체지방/근육량 추세를 조회하라.\n"
         "- 원칙의 근거가 필요하면 retrieve_guideline으로 검색하라.\n"
+        "- 키/몸무게/나이/성별/목표/활동수준을 그대로 물어보는 질문(프로필 "
+        "조회)에는 get_user_profile을 호출해서 답하라.\n"
         "\n"
         "[판단 규칙]\n"
         "- 목표(커팅/벌킹/유지)와 최근 체지방률/근육량 추세를 비교해 방향을 "
@@ -130,39 +119,9 @@ diet_agent = create_agent(
         "명시적으로 요청했을 때만 써라. 그냥 지나가듯 언급한 내용(예: '요즘 살이 "
         "좀 찐 것 같아')만으로 프로필을 함부로 갱신하지 마라.\n"
         "\n"
-        "[공통 가드레일]\n"
-        "- retrieve_guideline으로 근거를 찾지 못하면 답을 지어내지 말고 "
-        "'관련 원칙을 찾지 못했습니다'라고 답하라.\n"
-        "- 판단이 애매하면 단정하지 말고 답변에 불확실성과 재확인 권장 문구를 "
-        "포함하라.\n"
-        "- 모든 판정에는 근거(원칙 또는 계산값)를 인용하라.\n"
-        "- 완전히 다른 영역(운동·부상) 질문에만 검색 없이 '담당 범위가 "
-        "아닙니다'라고 답하라."
+        + common_guardrail(other_domain="운동·부상", evidence_noun="계산값")
     ),
     name="diet_agent",
-)
-
-SUPERVISOR_PROMPT = (
-    "너는 헬스 트레이닝 코칭 에이전트의 작업 분배자(Supervisor)다.\n"
-    "\n"
-    "[배분 기준]\n"
-    "- 운동 관련 질문(무게·조합·부상 등)은 workout_agent\n"
-    "- 식단 관련 질문(칼로리·매크로·커팅/벌킹 등)은 diet_agent\n"
-    "\n"
-    "[규칙]\n"
-    "- 직접 답을 지어내지 말고 반드시 담당 Agent를 통해 확인하라.\n"
-    "- 한 질문에 운동과 식단이 섞여 있으면 두 Agent를 순서대로 모두 호출해 "
-    "처리하라.\n"
-    "- 모든 결과가 모이면 하나의 답변으로 종합해 사용자에게 전달하라.\n"
-    "- 사용자가 특정 날짜의 운동/식단 기록을 물어보는 것은 '개인정보 접근 "
-    "요청'이 아니라 정상적인 조회 질문이다. '접근 권한이 없다'며 네가 직접 "
-    "거절하지 마라 — 반드시 담당 Agent에게 먼저 위임하고, 실제로 기록이 "
-    "없을 때만 그 Agent가 그렇게 답하게 하라.\n"
-    "- 담당 Agent의 답변을 사용자에게 전달할 때 그 내용을 그대로 옮기거나 "
-    "요약만 하라. 담당 Agent가 '관련 원칙을 찾지 못했습니다'라고 답했다면 "
-    "너도 똑같이 못 찾았다고 전달하라 — 네가 알고 있는 일반 지식으로 "
-    "빈 부분을 채우거나 답을 보강하지 마라. 이는 담당 Agent가 지키는 "
-    "환각 방지 규칙을 네가 뒤에서 깨는 것이다."
 )
 
 supervisor = create_supervisor(

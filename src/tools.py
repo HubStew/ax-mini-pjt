@@ -182,6 +182,18 @@ _PROFILE_ENUM_FIELDS = {
 
 
 @tool
+def get_user_profile() -> str:
+    """저장된 사용자 프로필(키·몸무게·나이·성별·목표·활동수준)을 그대로 보여준다."""
+    profile = _load_json("user_profile.json")
+    return (
+        f"키 {profile['height_cm']}cm · 몸무게 {profile['weight_kg']}kg · "
+        f"나이 {profile['age']}세 · 성별 {profile['gender']} · "
+        f"목표 {profile['goal']} · 목표 근육량 {profile['target_muscle_mass_kg']}kg · "
+        f"활동수준 {profile['activity_level']}"
+    )
+
+
+@tool
 def update_user_profile(field: str, value: str) -> str:
     """사용자 프로필의 항목 하나를 갱신한다.
 

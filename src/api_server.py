@@ -37,6 +37,11 @@ def run_query(question: str) -> dict:
     (Supervisor 최상위 노드만 보면 서브 에이전트의 최종 응답만 보이고 내부
     도구 호출은 안 보임 - 직접 확인함). Supervisor가 상태를 재생하며 같은
     이벤트를 여러 경로로 중복 방출하므로 tool_call id로 중복을 제거한다.
+
+    (검색 결과를 대화 앞에 미리 붙여서 "검색할지 말지"를 모델 판단에서 아예
+    없애보려 했으나, Supervisor가 그 텍스트를 보고 라우팅 없이 직접 답하려 드는
+    회귀가 생겨서 포기했다 - agent.py/prompts의 mandatory_search_rule 프롬프트
+    규칙에만 의존한다.)
     """
     worker_answers = {}
     supervisor_answer = ""
@@ -96,17 +101,6 @@ def run_query(question: str) -> dict:
         answer = supervisor_answer or "\n\n".join(worker_answers.values())
     else:
         answer = supervisor_answer
-
-    real_tools_called = any(
-        t["tool"] not in ("transfer_to_workout_agent", "transfer_to_diet_agent", "transfer_back_to_supervisor")
-        for t in trace
-    )
-    honest_refusal_markers = ("관련 원칙을 찾지 못했습니다", "담당 범위")
-    if not real_tools_called and answer and not any(marker in answer for marker in honest_refusal_markers):
-        # 프롬프트만으로는 "검색 없이 답 지어내기"를 100% 못 막는다 (모델이
-        # 가드레일을 무시하는 경우가 실제로 관측됨) - 도구를 하나도 안 쓰고
-        # 정직한 거절 문구도 없이 답했다면 환각으로 간주하고 강제로 덮어쓴다.
-        answer = "관련 원칙을 찾지 못했습니다. (해당 주제는 저희가 조회할 수 있는 가이드라인/기록 범위 밖입니다.)"
 
     return {"answer": answer, "contexts": contexts, "trace": trace}
 
