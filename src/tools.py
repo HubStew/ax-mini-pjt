@@ -124,8 +124,13 @@ _FAT_RATIO = 0.25
 def calc_macro(activity_level: str = "") -> str:
     """사용자 프로필로 BMR·TDEE·목표 칼로리와 매크로(단백질/지방/탄수화물)를 계산한다.
 
-    activity_level을 지정하지 않으면 프로필에 저장된 값을 쓴다.
+    activity_level을 지정하지 않으면 프로필에 저장된 값을 쓴다. 지정할 경우
+    light/moderate/active 중 하나여야 한다.
     """
+    if activity_level and activity_level not in _ACTIVITY_FACTORS:
+        allowed = "/".join(sorted(_ACTIVITY_FACTORS))
+        return f"activity_level에는 {allowed} 중 하나만 입력할 수 있습니다: {activity_level}"
+
     profile = _load_json("user_profile.json")
     weight = profile["weight_kg"]
     height = profile["height_cm"]
@@ -166,6 +171,14 @@ _PROFILE_FIELDS = {
     "target_muscle_mass_kg", "activity_level",
 }
 _PROFILE_NUMERIC_FIELDS = {"height_cm", "weight_kg", "age", "target_muscle_mass_kg"}
+# calc_macro가 이 값들을 딕셔너리 키로 찾아 쓰는데, 여기 없는 값이 들어오면
+# 에러 없이 조용히 기본값(유지/moderate)으로 폴백해버려 계산이 틀려도 티가
+# 안 난다. 그래서 저장 시점에 미리 막는다.
+_PROFILE_ENUM_FIELDS = {
+    "goal": {"cutting", "bulking", "maintain"},
+    "gender": {"male", "female"},
+    "activity_level": {"light", "moderate", "active"},
+}
 
 
 @tool
@@ -173,10 +186,17 @@ def update_user_profile(field: str, value: str) -> str:
     """사용자 프로필의 항목 하나를 갱신한다.
 
     field는 height_cm/weight_kg/age/gender/goal/target_muscle_mass_kg/
-    activity_level 중 하나여야 한다.
+    activity_level 중 하나여야 한다. gender는 male/female, goal은
+    cutting/bulking/maintain, activity_level은 light/moderate/active 중
+    하나여야 하며, 그 외 값은 저장을 거부하고 에러 메시지를 반환한다
+    (calc_macro가 이 값들을 그대로 계산에 쓰기 때문).
     """
     if field not in _PROFILE_FIELDS:
         return f"지원하지 않는 항목입니다: {field}"
+
+    if field in _PROFILE_ENUM_FIELDS and value not in _PROFILE_ENUM_FIELDS[field]:
+        allowed = "/".join(sorted(_PROFILE_ENUM_FIELDS[field]))
+        return f"{field}에는 {allowed} 중 하나만 입력할 수 있습니다: {value}"
 
     profile = _load_json("user_profile.json")
 
