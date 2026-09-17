@@ -2,7 +2,12 @@
 
 ## 기술 스택
 - Python, LangChain, LangGraph
-- 모델은 Amazon Bedrock (ChatBedrockConverse) — `us.anthropic.claude-sonnet-4-5-20250929-v1:0`, region `us-east-1`
+- 모델은 Amazon Bedrock (ChatBedrockConverse) — `us.amazon.nova-pro-v1:0`, region `us-east-1`
+  (원래 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`로 시작했으나, 평가 중
+  Bedrock 일일 토큰 한도(ThrottlingException)에 반복적으로 걸려 Nova Pro로
+  전환함. Sonnet 계열 대비 도구 호출 안정성은 대체로 양호하나, 낯선 주제에서
+  `retrieve_guideline` 검색을 건너뛰고 바로 답하는 경향이 있음 — 알려진 한계로
+  README 트라이앤에러에 기록 예정)
 - 임베딩은 BedrockEmbeddings — `amazon.titan-embed-text-v2:0`
 - 벡터DB는 Chroma
 - Agent 생성은 `langchain.agents`의 `create_agent`, Supervisor 조립은
@@ -73,8 +78,11 @@ evaluation/         test_queries.csv, round1_report.md, round2_report.md
 ## 공통 가드레일
 - 판단이 애매하면 단정하지 않고, 답변에 불확실성·재확인 권장 문구를 반드시 포함한다
   (미탐이 오탐보다 위험 — 애매하면 안전한 쪽으로)
-- `retrieve_guideline`으로 찾은 근거가 없으면 답을 지어내지 않고 "관련 원칙을
-  찾지 못했다"고 답한다
+- `retrieve_guideline`으로 찾은 근거가 없을 때 (완화된 기준)
+  - 완전히 다른 영역(운동↔식단) 질문 → "담당 범위가 아니다"라고 답하고 지어내지 않는다
+  - 같은 영역 안의 낯선 주제(예: 케틀벨, 크레아틴)는 일반적인 정보 수준 설명은
+    가능하되, 데이터/가이드라인 근거 없는 구체적 수치 처방(무게·세트·용량 등)은
+    지어내지 않는다 — 일반 정보임을 명시한다
 - 개인 신체정보(키·몸무게·나이·운동/식단 기록 등)는 외부로 전송·공유하지 않는다
 
 ## 장기 메모리 (구현 방식)

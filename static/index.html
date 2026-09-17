@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>헬스 트레이닝 코칭 에이전트</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>헬스 트레이닝 코칭 에이전트</h1>
+    <p class="subtitle">운동·식단을 물어보세요. 기록을 기억하고 있어요.</p>
+
+    <form id="query-form">
+      <textarea id="question" rows="3" placeholder="예: 벤치프레스 25kg으로 계속 반복수가 늘고 있는데 무게 올려도 될까?"></textarea>
+      <button type="submit" id="submit-btn">물어보기</button>
+    </form>
+
+    <div id="status"></div>
+
+    <section id="result" hidden>
+      <h2>답변</h2>
+      <div id="answer"></div>
+
+      <details id="contexts-details">
+        <summary>근거 문서 (contexts)</summary>
+        <div id="contexts"></div>
+      </details>
+
+      <details id="trace-details">
+        <summary>도구 호출 내역 (trace)</summary>
+        <div id="trace"></div>
+      </details>
+    </section>
+  </main>
+
+  <script src="script.js" defer></script>
+</body>
+</html>
