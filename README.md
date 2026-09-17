@@ -80,19 +80,12 @@ python scripts/run_eval.py evaluation/round1_report.md
   `expected_traits` 기반 사람 확인으로 대체 (`round1_report.md`)
 
 ## 인-아웃 세트 통과율 (자체 평가)
-- 수정 전 (디버그 루프 3라운드 적용 전 상태 재현, `evaluation/round1_before_debug_loop.md`):
-  13/20 통과 (65%) — positive 6/7, negative 1/4, edge 4/6, guardrail 2/3
-- 1차 (Day9 종료, `evaluation/round1_report.md`): 16/20 통과 (80%) — positive 7/7,
-  negative 3/4, edge 4/6, guardrail 2/3
+- 1차 (Day9 종료, `evaluation/round1_report.md`): 13/20 통과 (65%) — positive 6/7,
+  negative 1/4, edge 4/6, guardrail 2/3
 - 2차 (Day10 개선 후): 예정 (진행 예정 — 결과 나오는 대로 갱신)
-- 개선폭: 디버그 루프(채점→실패 1건 선택→모델답변/판정기준 진단→1개만 수정→
-  재채점)를 3라운드 적용해 65%(13/20) → 80%(16/20)로 개선 (주요 개선 사항:
-  Supervisor 동시 전이 금지, 서브 에이전트 영역 침범 방지, 과도하게 엄격했던
-  expected_tools 기준 완화). **참고**: Nova Pro는 temperature=0이어도 완전히
-  결정적이지 않아 같은 코드로 재채점해도 문항별로 ±1~2건 정도 통과율이
-  흔들린다 (디버그 루프 직후엔 18/20(90%)까지 나온 적도 있음) — 수정 전/후
-  두 스냅샷은 코드를 정확히 되돌려 같은 조건에서 재현한 값이라 개선폭 자체는
-  유효하다
+- 개선 예정 사항: Supervisor 동시 전이 금지, 서브 에이전트 영역 침범 방지,
+  과도하게 엄격했던 expected_tools 기준 완화 — 원인 진단은 끝났고 2차에서
+  적용해 통과율을 다시 측정할 예정
 
 ## 트라이앤에러 회고
 
@@ -146,5 +139,4 @@ python scripts/run_eval.py evaluation/round1_report.md
   worker/supervisor 답변 분리 로직)
 - `scripts/run_eval.py` — 평가 스크립트
 - `evaluation/test_queries.csv` — 평가셋
-- `evaluation/round1_before_debug_loop.md` — 디버그 루프 적용 전 스냅샷 (13/20, 65%)
-- `evaluation/round1_report.md` — 1차(Day9) 최종 결과 (16/20, 80%)
+- `evaluation/round1_report.md` — 1차(Day9) 평가 결과
