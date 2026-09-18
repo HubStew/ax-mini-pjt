@@ -2,12 +2,10 @@
 
 ## 기술 스택
 - Python, LangChain, LangGraph
-- 모델은 Amazon Bedrock (ChatBedrockConverse) — `us.amazon.nova-pro-v1:0`, region `us-east-1`
-  (원래 `us.anthropic.claude-sonnet-4-5-20250929-v1:0`로 시작했으나, 평가 중
-  Bedrock 일일 토큰 한도(ThrottlingException)에 반복적으로 걸려 Nova Pro로
-  전환함. Sonnet 계열 대비 도구 호출 안정성은 대체로 양호하나, 낯선 주제에서
-  `retrieve_guideline` 검색을 건너뛰고 바로 답하는 경향이 있음 — 알려진 한계로
-  README 트라이앤에러에 기록 예정)
+- 모델은 Amazon Bedrock (ChatBedrockConverse) — `us.amazon.nova-pro-v1:0`
+  (최종 확정), region `us-east-1`. Bedrock 일일 토큰 한도(ThrottlingException)
+  때문에 개발 중 Sonnet 계열과 여러 번 오갔다 — 교체 경위와 각 모델의
+  한계는 README 트라이앤에러 참고
 - 임베딩은 BedrockEmbeddings — `amazon.titan-embed-text-v2:0`
 - 벡터DB는 Chroma
 - Agent 생성은 `langchain.agents`의 `create_agent`, Supervisor 조립은

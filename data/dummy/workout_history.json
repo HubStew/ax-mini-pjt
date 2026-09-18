@@ -7924,5 +7924,23 @@
     "cardio_intensity": null,
     "pain_reported": false,
     "note": ""
+  },
+  {
+    "date": "2026-09-18",
+    "exercise": "힙스러스트",
+    "category": "하체",
+    "weight_kg": 60.0,
+    "sets": 3,
+    "reps": [
+      9,
+      9,
+      9
+    ],
+    "soreness_before_session": "none",
+    "hours_since_last_same_category": 72,
+    "same_day_cardio_minutes": 40,
+    "cardio_intensity": null,
+    "pain_reported": false,
+    "note": ""
   }
 ]

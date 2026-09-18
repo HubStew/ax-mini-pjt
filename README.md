@@ -25,6 +25,10 @@
   검증을 함께 적용 — 프롬프트만으로 못 막는 경우를 코드가 보완
 - Day7: 규칙 기반 자동 채점(도구 호출 여부·금지 문구 대조) + 사람이 확인할
   정성 항목 병기 — `run_eval.py`가 이 방식을 그대로 씀
+- Day4: 상태를 바꾸는 도구의 동시성 안전 — `log_meal`/`log_workout_session`
+  등 쓰기 도구를 `threading.Lock`으로 감싸 병렬 도구 호출 시 파일이 깨지는
+  레이스 컨디션을 방지 (Day4 "도구 에러 처리" 원칙의 연장 — 실패를 방치하지
+  않고 코드 차원에서 막음)
 
 ## 아키텍처
 ```
@@ -32,8 +36,8 @@
    │
    ▼
 Supervisor (라우팅만, 직접 답하지 않음 · 한 턴에 전이 도구 하나만 호출)
-   ├── 운동/신체 질문 ──▶ workout_agent ──▶ retrieve_guideline / get_workout_history / get_diet_history(체지방·근육량)
-   └── 식단/영양 질문 ──▶ diet_agent    ──▶ retrieve_guideline / get_diet_history / calc_macro / get_user_profile / update_user_profile
+   ├── 운동/신체 질문 ──▶ workout_agent ──▶ retrieve_guideline / get_workout_history / log_workout_session / delete_workout_session / get_diet_history(체지방·근육량)
+   └── 식단/영양 질문 ──▶ diet_agent    ──▶ retrieve_guideline / get_diet_history / log_meal / update_meal / delete_meal / calc_macro / get_user_profile / update_user_profile
                                               │
                                               ▼
                                      data/dummy/*.json (장기 메모리 역할)
@@ -90,6 +94,12 @@ python scripts/run_eval.py evaluation/round1_report.md
   질문에서 영어 고정 거절 문구가 나오던 문제 수정). 남은 미달 원인은
   대부분 모델이 `retrieve_guideline`/`calc_macro` 같은 도구 호출을 간헐적으로
   건너뛰는 플레이키니스로, 코드를 안 바꿔도 재채점 시 ±몇 건씩 흔들린다
+- 제출 직전 최종 점검 (`evaluation/round3_report.md`): 15/20 (75%) — 그 사이
+  추가된 운동/식단 기록 CRUD 도구(log/update/delete) 반영 후 재평가. 이
+  라운드에서 새로 발견해 고친 것: 판단 질문("오늘 ~했는데 괜찮아?")에서
+  무게·세트·반복수 정보가 없는데도 모델이 수치를 지어내 `log_workout_session`으로
+  실제 저장까지 해버리던 문제 — "명시적으로 안 알려주면 절대 추측해서
+  기록하지 마라" 규칙 추가로 해결
 
 ## 트라이앤에러 회고
 
@@ -113,9 +123,26 @@ python scripts/run_eval.py evaluation/round1_report.md
 - 환각 방지 기준을 "다른 영역은 거절 / 같은 영역의 낯선 주제는 일반 정보까지
   허용(수치 처방만 금지)"으로 완화 — 처음엔 전면 거절이었는데, 케틀벨처럼
   상식적인 질문까지 막는 게 과하다고 판단
-- 모델은 여러 번 교체(Sonnet→Haiku→Sonnet→Nova Pro) — Bedrock 일일 토큰
-  한도가 개발 중반 이후 거의 항상 소진돼 있어, 그때그때 쓸 수 있는 모델로
-  넘어감. 최종 제출 직전까지 모델을 확정하지 않기로 함
+- 모델은 개발 내내 계속 교체(Sonnet 4.5→Haiku→Sonnet 4.5/4.6→Nova Pro를
+  수차례 왕복) — Bedrock 일일 토큰 한도가 거의 항상 소진돼 있어, 그때그때
+  쓸 수 있는 모델로 넘어감. 최종 제출 직전까지 확정을 미루기로 했고,
+  마지막에 안정적으로 남아있던 **Nova Pro로 최종 확정**함
+- LangGraph의 `ToolNode`가 한 턴에 여러 도구 호출을 스레드풀로 동시 실행한다는
+  걸 몰랐다가, 사용자가 "세 끼 먹었어"처럼 한 번에 여러 항목을 보고하자
+  `log_meal`이 같은 JSON 파일을 동시에 읽기-수정-쓰기 하면서 파일이 실제로
+  깨지는 사고(`JSONDecodeError: Extra data`)가 났다 — 모든 쓰기 도구를
+  `threading.Lock`으로 직렬화해 해결
+- 사용자가 연도 없이 날짜만 말하면("9월 15일에 스쿼트 했었어") 모델이 자기
+  학습 시점 기준 연도로 잘못 추측해 엉뚱한 해로 저장하는 사고가 있었다 —
+  시스템 프롬프트에 "오늘 날짜는 YYYY-MM-DD다"를 명시해 해결
+- `update_meal`/`delete_meal`이 부분 일치만 써서 "김치찌개"가 "김치찌개 +
+  공깃밥"에도 걸려, 사용자가 아무리 구체적으로 말해도 둘 중 하나를 특정 못
+  하는 문제가 있었다 — 정확히 일치하는 항목을 먼저 찾고 없을 때만 부분
+  일치로 넘어가도록 수정
+- Zone 관련 질문("존2가 뭐야?")이 간헐적으로 검색 실패했다 — 동의어 사전이
+  "존2"처럼 붙여 쓴 표현만 문자열 그대로 잡아서, 모델이 검색어를 "존
+  2단계"처럼 띄어 재구성하면 매칭이 안 됐음. 전역 임계값을 낮추는 대신
+  존/zone 표현만 정규식으로 띄어쓰기·대소문자를 허용해 넓힘
 
 **남은 한계 · 향후 개선 방향**
 - 혼합 질문(운동+식단) 라우팅이 간헐적으로 여전히 루프에 빠짐 — 완전히
@@ -127,21 +154,29 @@ python scripts/run_eval.py evaluation/round1_report.md
   발견 — 프롬프트로 우회 불가한 모델 제공사 쪽 이슈라 별도 조치 안 함
 - "오늘 저녁 뭐 먹을까?" 같은 미래형 추천 질문에서 diet_agent가 도구 호출
   없이 답하려는 경향 발견, 아직 미해결
+- `threading.Lock`은 같은 프로세스 안의 동시 도구 호출만 막는다 — 서버
+  프로세스와 별도로 스크립트를 띄워 같은 JSON 파일을 동시에 쓰면 여전히
+  레이스 컨디션이 가능함 (개발 중 실제로 조심해야 했던 부분)
 - RAGAS 정식 지표 산출은 안 함 — 다음 개선 여지가 있다면 `ragas` 패키지를
   붙여 실제 context_recall/precision 수치화
 
 ## 핵심 코드 위치
-- `src/agent.py:35` — workout_agent 조립 (`create_agent`)
-- `src/agent.py:80` — diet_agent 조립
-- `src/agent.py:127` — supervisor 조립 (`create_supervisor`)
+- `src/agent.py:48` — workout_agent 조립 (`create_agent`)
+- `src/agent.py:112` — diet_agent 조립
+- `src/agent.py:178` — supervisor 조립 (`create_supervisor`)
 - `src/prompts/__init__.py` — 공유 프롬프트 템플릿(검색 필수 규칙, 공통
   가드레일, SUPERVISOR_PROMPT)
-- `src/tools.py` — 도메인 도구 5종(retrieve_guideline, get_workout_history,
-  get_diet_history, calc_macro, get_user_profile, update_user_profile)
-- `src/retriever.py` — RAG 파이프라인(청킹·임베딩·임계값 검색)
-- `src/api_server.py:32` — `run_query` (answer/contexts/trace 조립,
+- `src/tools.py` — 도메인 도구: 조회(retrieve_guideline, get_workout_history,
+  get_diet_history, get_user_profile, calc_macro) + 기록 CRUD
+  (log_workout_session, delete_workout_session, log_meal, update_meal,
+  delete_meal, update_user_profile) — 쓰기 도구는 `_write_lock`으로 동시성 보호
+- `src/retriever.py` — RAG 파이프라인(청킹·임베딩·임계값 검색, Zone 정규식 확장)
+- `src/api_server.py:34` — `run_query` (answer/contexts/trace 조립,
   worker/supervisor 답변 분리 로직)
+- `src/api_server.py` — `GET /status` (프로필·최근 기록을 LLM 없이 즉시 반환,
+  웹 데모 사이드바용)
 - `scripts/run_eval.py` — 평가 스크립트
 - `evaluation/test_queries.csv` — 평가셋
 - `evaluation/round1_report.md` — 1차(Day9) 평가 결과
 - `evaluation/round2_report.md` — 2차(Day10) 평가 결과
+- `evaluation/round3_report.md` — 제출 직전 최종 점검 결과

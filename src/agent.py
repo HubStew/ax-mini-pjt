@@ -33,7 +33,7 @@ load_dotenv()
 # 기준인데 모델이 2024년으로 저장함). 시스템 프롬프트에 오늘 날짜를 명시해
 # 해결한다.
 _TODAY = date.today().isoformat()
-MODEL = "global.anthropic.claude-sonnet-4-6"
+MODEL = "us.amazon.nova-pro-v1:0"
 worker_llm = ChatBedrockConverse(model=MODEL, region_name="us-east-1", temperature=0)
 
 
@@ -73,10 +73,16 @@ workout_agent = create_agent(
         "- 체지방/근육량 장기 추세가 필요하면 get_diet_history(kind='body_composition')를 써라.\n"
         "- 사용자가 방금 한 운동을 알려주면(과거 기록을 물어보는 게 아니라 "
         "'오늘 벤치프레스 25kg 3세트 했어'처럼 새로 보고하는 경우) "
-        "log_workout_session으로 기록하라. 종목/부위/무게/세트/반복수 중 "
-        "빠진 게 있으면 되물어라. 사용자가 특정 날짜를 언급하며 보고하면 "
-        "(예: '9월 15일에 스쿼트 했었어') 그 날짜를 YYYY-MM-DD로 변환해 "
-        "date_str에 전달하라 (생략하면 오늘로 저장된다).\n"
+        "log_workout_session으로 기록하라. **무게·세트·반복수를 사용자가 "
+        "명시적으로 알려주지 않았으면 절대 추측해서 지어내 기록하지 마라** "
+        "— 반드시 되물어서 실제 값을 받은 뒤에만 log_workout_session을 "
+        "호출하라. 예를 들어 '오늘 힙스러스트하고 유산소 40분 했는데 "
+        "괜찮아?'처럼 무게·세트·반복수 없이 유산소 여부만 언급한 질문은 "
+        "기록 요청이 아니라 판단 질문이니, log_workout_session을 호출하지 "
+        "말고 get_workout_history로 기존 기록을 조회해서 판단하라. 사용자가 "
+        "특정 날짜를 언급하며 보고하면(예: '9월 15일에 스쿼트 했었어') 그 "
+        "날짜를 YYYY-MM-DD로 변환해 date_str에 전달하라 (생략하면 오늘로 "
+        "저장된다).\n"
         "- 사용자가 이미 기록한 운동을 취소·삭제해달라고 하면(예: '아까 "
         "벤치프레스 기록한 거 잘못됐어, 지워줘') delete_workout_session으로 "
         "지워라.\n"
