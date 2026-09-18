@@ -6,6 +6,7 @@ data/training_guidelines.md, data/nutrition_guidelines.md를 마크다운 섹션
 """
 import json
 import os
+import re
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -76,9 +77,22 @@ def _build_or_load_vectorstore(embeddings):
 SYNONYM_MAP = json.loads((DATA_DIR / "query_synonyms.json").read_text(encoding="utf-8"))
 
 
+_ZONE_PATTERN = re.compile(r"(?:존|zone)\s*([1-5])", re.IGNORECASE)
+
+
 def _expand_query(query: str) -> str:
-    """질의에 동의어 사전의 정식 표현을 덧붙여 검색 매칭률을 높인다."""
+    """질의에 동의어 사전의 정식 표현을 덧붙여 검색 매칭률을 높인다.
+
+    사전은 "존2"처럼 붙여 쓴 표현만 문자열 그대로 잡는데, 모델이 검색어를
+    "존 2단계"처럼 띄어서 재구성하면 사전에 안 걸려 검색이 실패하는 게
+    실제로 관측됐다. 존 표현만은 정규식으로 띄어쓰기를 허용해 더 안정적으로
+    잡는다 (전역 임계값을 낮추는 대신 이 범위만 넓힘 - 다른 질문의 환각
+    방지 기준에는 영향 없음).
+    """
     extra_terms = [canonical for alias, canonical in SYNONYM_MAP.items() if alias in query]
+    zone_match = _ZONE_PATTERN.search(query)
+    if zone_match:
+        extra_terms.append(f"Zone {zone_match.group(1)}")
     if not extra_terms:
         return query
     return query + " " + " ".join(extra_terms)
