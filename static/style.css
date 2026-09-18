@@ -21,9 +21,53 @@ body {
 }
 
 .container {
-  max-width: 640px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 40px 20px 80px;
+}
+
+#my-status-details {
+  margin-top: 0;
+  margin-bottom: 24px;
+  border-top: none;
+  padding-top: 0;
+}
+
+.status-section {
+  margin-top: 14px;
+}
+
+.status-section h3 {
+  font-size: 0.9rem;
+  color: var(--muted);
+  margin: 0 0 6px;
+}
+
+.status-row {
+  display: flex;
+  gap: 14px;
+}
+
+.status-row .status-section {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-box {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+@media (max-width: 520px) {
+  .status-row {
+    flex-direction: column;
+  }
 }
 
 h1 {

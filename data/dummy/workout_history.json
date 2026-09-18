@@ -7870,5 +7870,59 @@
     "cardio_intensity": null,
     "pain_reported": true,
     "note": "어깨 앞쪽 통증 호소"
+  },
+  {
+    "date": "2026-09-15",
+    "exercise": "레그익스텐션",
+    "category": "하체",
+    "weight_kg": 30.0,
+    "sets": 3,
+    "reps": [
+      11,
+      11,
+      10
+    ],
+    "soreness_before_session": "mild",
+    "hours_since_last_same_category": 96,
+    "same_day_cardio_minutes": 0,
+    "cardio_intensity": null,
+    "pain_reported": false,
+    "note": ""
+  },
+  {
+    "date": "2026-09-15",
+    "exercise": "힙스러스트",
+    "category": "하체",
+    "weight_kg": 60.0,
+    "sets": 3,
+    "reps": [
+      9,
+      9,
+      9
+    ],
+    "soreness_before_session": "mild",
+    "hours_since_last_same_category": 96,
+    "same_day_cardio_minutes": 0,
+    "cardio_intensity": null,
+    "pain_reported": false,
+    "note": ""
+  },
+  {
+    "date": "2026-09-15",
+    "exercise": "스쿼트",
+    "category": "하체",
+    "weight_kg": 60.0,
+    "sets": 3,
+    "reps": [
+      10,
+      10,
+      10
+    ],
+    "soreness_before_session": "none",
+    "hours_since_last_same_category": 96,
+    "same_day_cardio_minutes": 0,
+    "cardio_intensity": null,
+    "pain_reported": false,
+    "note": ""
   }
 ]

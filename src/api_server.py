@@ -8,11 +8,13 @@ from pathlib import Path
 
 from botocore.exceptions import ClientError
 from fastapi import FastAPI, HTTPException
+from langgraph.errors import GraphRecursionError
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage
 
 from agent import app as graph_app, get_text
+from tools import get_user_profile, get_workout_history, get_diet_history
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
@@ -117,7 +119,31 @@ def query(req: QueryRequest) -> QueryResponse:
                 detail="지금 요청이 많아 잠시 처리할 수 없습니다. 잠시 후 다시 시도해주세요.",
             )
         raise HTTPException(status_code=502, detail=f"모델 호출 중 오류가 발생했습니다: {error_code or e}")
+    except GraphRecursionError:
+        # 혼합 질문(운동+식단)에서 Supervisor가 라우팅 루프에 빠지는 경우가
+        # 간헐적으로 있다 (알려진 한계 - README 트라이앤에러 참고). 원인
+        # 자체는 아직 완전히 못 고쳤지만, 최소한 500 에러 대신 재시도를
+        # 유도하는 안내를 준다.
+        raise HTTPException(
+            status_code=503,
+            detail="질문을 처리하는 중 라우팅이 꼬였습니다. 질문을 조금 더 "
+            "단순하게 나눠서 다시 시도해주세요.",
+        )
     return QueryResponse(**result)
+
+
+@api.get("/status")
+def status() -> dict:
+    """웹 데모 사이드바용 - 저장된 프로필/최근 운동·식단 기록을 원본 그대로
+
+    보여준다. 코칭 판단이 필요 없는 단순 조회라 LLM 에이전트를 거치지 않고
+    도구 함수를 직접 호출한다 (토큰 비용 없이 즉시·결정적으로 응답).
+    """
+    return {
+        "profile": get_user_profile.invoke({}),
+        "recent_workouts": get_workout_history.invoke({"weeks": 4}),
+        "recent_diet": get_diet_history.invoke({"kind": "diet", "weeks": 4}),
+    }
 
 
 # /query 라우트 다음에 마운트해야 한다 - 먼저 마운트하면 StaticFiles가

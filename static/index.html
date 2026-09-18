@@ -11,6 +11,24 @@
     <h1>헬스 트레이닝 코칭 에이전트</h1>
     <p class="subtitle">운동·식단을 물어보세요. 기록을 기억하고 있어요.</p>
 
+    <details id="my-status-details">
+      <summary>내 상태 (프로필 · 최근 운동·식단 기록)</summary>
+      <div class="status-section">
+        <h3>프로필</h3>
+        <div id="profile-info" class="status-box">불러오는 중...</div>
+      </div>
+      <div class="status-row">
+        <div class="status-section">
+          <h3>최근 운동 기록</h3>
+          <div id="workout-history" class="status-box">불러오는 중...</div>
+        </div>
+        <div class="status-section">
+          <h3>최근 식단 기록</h3>
+          <div id="diet-history" class="status-box">불러오는 중...</div>
+        </div>
+      </div>
+    </details>
+
     <form id="query-form">
       <textarea id="question" rows="3" placeholder="예: 벤치프레스 25kg으로 계속 반복수가 늘고 있는데 무게 올려도 될까?"></textarea>
       <button type="submit" id="submit-btn">물어보기</button>

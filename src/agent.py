@@ -3,6 +3,8 @@
 day6_practice/supervisor_assembled.py의 동기 조립 패턴(create_agent 여러 개 +
 create_supervisor)을 그대로 따른다. MCP는 쓰지 않아 비동기 배선이 필요 없다.
 """
+from datetime import date
+
 from dotenv import load_dotenv
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
@@ -12,7 +14,12 @@ from langgraph_supervisor import create_supervisor
 from tools import (
     retrieve_guideline,
     get_workout_history,
+    log_workout_session,
+    delete_workout_session,
     get_diet_history,
+    log_meal,
+    update_meal,
+    delete_meal,
     calc_macro,
     get_user_profile,
     update_user_profile,
@@ -20,7 +27,13 @@ from tools import (
 from prompts import mandatory_search_rule, common_guardrail, SUPERVISOR_PROMPT
 
 load_dotenv()
-MODEL = "us.amazon.nova-pro-v1:0"
+# 사용자가 "9월 15일에 스쿼트 했었어"처럼 연도 없이 날짜를 말하면, 모델이
+# 자기 학습 시점 기준 연도로 잘못 추측해 log_workout_session/log_meal에
+# 엉뚱한 연도로 저장하는 사고가 실제로 있었다 (더미데이터는 전부 2026년
+# 기준인데 모델이 2024년으로 저장함). 시스템 프롬프트에 오늘 날짜를 명시해
+# 해결한다.
+_TODAY = date.today().isoformat()
+MODEL = "global.anthropic.claude-sonnet-4-6"
 worker_llm = ChatBedrockConverse(model=MODEL, region_name="us-east-1", temperature=0)
 
 
@@ -34,9 +47,13 @@ def get_text(message):
 
 workout_agent = create_agent(
     worker_llm,
-    [retrieve_guideline, get_workout_history, get_diet_history],
+    [retrieve_guideline, get_workout_history, log_workout_session, delete_workout_session, get_diet_history],
     system_prompt=(
         "너는 웨이트 트레이닝 코칭 전문가다. 무게·조합·부상 관련 질문만 담당한다.\n"
+        f"오늘 날짜는 {_TODAY}이다. 사용자가 '9월 15일에 스쿼트 했었어'처럼 "
+        "연도 없이 날짜를 말하면 반드시 이 기준으로 연도를 판단해 "
+        "log_workout_session/delete_workout_session의 date_str에 넘겨라 "
+        "(네가 알고 있는 다른 연도를 쓰지 마라).\n"
         "\n"
         + mandatory_search_rule(
             own_domain="운동/신체",
@@ -54,6 +71,15 @@ workout_agent = create_agent(
         "도구가 알아서 '기록이 없습니다'라고 알려준다.\n"
         "- 원칙의 근거가 필요하면 retrieve_guideline으로 검색하라.\n"
         "- 체지방/근육량 장기 추세가 필요하면 get_diet_history(kind='body_composition')를 써라.\n"
+        "- 사용자가 방금 한 운동을 알려주면(과거 기록을 물어보는 게 아니라 "
+        "'오늘 벤치프레스 25kg 3세트 했어'처럼 새로 보고하는 경우) "
+        "log_workout_session으로 기록하라. 종목/부위/무게/세트/반복수 중 "
+        "빠진 게 있으면 되물어라. 사용자가 특정 날짜를 언급하며 보고하면 "
+        "(예: '9월 15일에 스쿼트 했었어') 그 날짜를 YYYY-MM-DD로 변환해 "
+        "date_str에 전달하라 (생략하면 오늘로 저장된다).\n"
+        "- 사용자가 이미 기록한 운동을 취소·삭제해달라고 하면(예: '아까 "
+        "벤치프레스 기록한 거 잘못됐어, 지워줘') delete_workout_session으로 "
+        "지워라.\n"
         "\n"
         "[판단 규칙]\n"
         "- 과부하 신호: 반복수 증가가 무게 증가보다 우선한다. 반복수가 2주 이상 "
@@ -79,9 +105,13 @@ workout_agent = create_agent(
 
 diet_agent = create_agent(
     worker_llm,
-    [retrieve_guideline, get_diet_history, calc_macro, get_user_profile, update_user_profile],
+    [retrieve_guideline, get_diet_history, log_meal, update_meal, delete_meal, calc_macro, get_user_profile, update_user_profile],
     system_prompt=(
         "너는 식단·영양 코칭 전문가다. 칼로리·매크로·커팅/벌킹 관련 질문만 담당한다.\n"
+        f"오늘 날짜는 {_TODAY}이다. 사용자가 '어제 저녁에 라면 먹었어'처럼 "
+        "연도 없이 날짜를 말하면 반드시 이 기준으로 연도를 판단해 "
+        "log_meal/update_meal/delete_meal의 date_str에 넘겨라 (네가 알고 "
+        "있는 다른 연도를 쓰지 마라).\n"
         "\n"
         + mandatory_search_rule(
             own_domain="식단/영양",
@@ -92,6 +122,21 @@ diet_agent = create_agent(
         )
         + "\n"
         "[판단 전 필수 조회]\n"
+        "- 사용자가 방금 먹은 걸 새로 알려주면(예: '오늘 저녁으로 김치찌개 "
+        "먹었어', '방금 라면 먹었어'처럼 과거를 묻는 게 아니라 새 정보를 "
+        "보고하는 경우) log_meal로 기록하라. 이미 있는 기록을 조회하는 게 "
+        "아니라 새로 저장하는 것이니 get_diet_history를 대신 부르지 마라. "
+        "칼로리를 안 알려줬으면 대략 추정해서 기록하되, 추정값이라고 "
+        "답변에서 밝혀라. 사용자가 특정 날짜를 언급하며 보고하면(예: '어제 "
+        "저녁에 라면 먹었어') 그 날짜를 YYYY-MM-DD로 변환해 date_str에 "
+        "전달하라 (생략하면 오늘로 저장된다).\n"
+        "- 사용자가 이미 기록한 끼니에 뭔가를 더했다고 말하면(예: '아까 "
+        "김치찌개 먹을 때 공깃밥도 같이 먹었어') log_meal로 별도 항목을 새로 "
+        "추가하지 말고 update_meal로 기존 끼니 이름·칼로리를 합쳐서 수정하라. "
+        "update_meal이 일치하는 끼니를 못 찾으면 그때는 log_meal로 새로 "
+        "추가하라.\n"
+        "- 사용자가 이미 기록한 끼니를 취소·삭제해달라고 하면(예: '아까 라면 "
+        "먹었다고 한 거 취소해줘') delete_meal로 지워라.\n"
         "- 사용자의 식단·섭취량에 관한 질문(예: '오늘 식단 어때', '과식한 것 "
         "같아', '특정 날짜에 뭐 먹었는지', '9월 14일 식사 기록' 등 표현·문체와 "
         "무관하게 음식/끼니/섭취를 묻는 모든 질문)에는, 사용자가 먹은 걸 직접 "

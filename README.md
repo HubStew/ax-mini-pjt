@@ -82,10 +82,14 @@ python scripts/run_eval.py evaluation/round1_report.md
 ## 인-아웃 세트 통과율 (자체 평가)
 - 1차 (Day9 종료, `evaluation/round1_report.md`): 13/20 통과 (65%) — positive 6/7,
   negative 1/4, edge 4/6, guardrail 2/3
-- 2차 (Day10 개선 후): 예정 (진행 예정 — 결과 나오는 대로 갱신)
-- 개선 예정 사항: Supervisor 동시 전이 금지, 서브 에이전트 영역 침범 방지,
-  과도하게 엄격했던 expected_tools 기준 완화 — 원인 진단은 끝났고 2차에서
-  적용해 통과율을 다시 측정할 예정
+- 2차 (Day10 개선 후, `evaluation/round2_report.md`): 15/20 통과 (75%) —
+  positive 7/7, negative 2/4, edge 4/6, guardrail 2/3
+- 개선폭: +2건 (65% → 75%). 적용한 개선 사항 — Supervisor 동시 전이 금지
+  (혼합 질문 무한루프 완화), 서브 에이전트 영역 침범 방지, 과도하게 엄격했던
+  expected_tools 기준 완화, 항상 한국어로 답하도록 강제(프롬프트 인젝션성
+  질문에서 영어 고정 거절 문구가 나오던 문제 수정). 남은 미달 원인은
+  대부분 모델이 `retrieve_guideline`/`calc_macro` 같은 도구 호출을 간헐적으로
+  건너뛰는 플레이키니스로, 코드를 안 바꿔도 재채점 시 ±몇 건씩 흔들린다
 
 ## 트라이앤에러 회고
 
@@ -140,3 +144,4 @@ python scripts/run_eval.py evaluation/round1_report.md
 - `scripts/run_eval.py` — 평가 스크립트
 - `evaluation/test_queries.csv` — 평가셋
 - `evaluation/round1_report.md` — 1차(Day9) 평가 결과
+- `evaluation/round2_report.md` — 2차(Day10) 평가 결과

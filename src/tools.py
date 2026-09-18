@@ -4,6 +4,7 @@
 조회 함수들이 대신한다 — LangGraph Store 이관은 후순위).
 """
 import json
+import threading
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -14,9 +15,22 @@ from retriever import retrieve_guideline as _retrieve_guideline
 BASE_DIR = Path(__file__).resolve().parent.parent
 DUMMY_DIR = BASE_DIR / "data" / "dummy"
 
+# LangGraph의 ToolNode는 한 턴에 여러 도구 호출이 있으면 스레드풀로 동시
+# 실행한다 - 사용자가 "세 끼 먹었어"처럼 한 번에 여러 항목을 보고하면
+# log_meal이 같은 파일에 동시에 읽기-수정-쓰기를 하면서 파일이 깨지는 게
+# 실제로 재현됐다 (JSONDecodeError: Extra data). 쓰기 도구는 전부 이 락으로
+# 감싸 직렬화한다.
+_write_lock = threading.Lock()
+
 
 def _load_json(name: str):
     return json.loads((DUMMY_DIR / name).read_text(encoding="utf-8"))
+
+
+def _save_json(name: str, data) -> None:
+    (DUMMY_DIR / name).write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 @tool
@@ -49,25 +63,146 @@ def get_workout_history(exercise: str = "", category: str = "", weeks: int = 4) 
         filtered = [s for s in filtered if s["exercise"] == exercise]
     elif category:
         filtered = [s for s in filtered if s["category"] == category]
-    filtered = [s for s in filtered if date.fromisoformat(s["date"]) > cutoff]
+    filtered = sorted(
+        (s for s in filtered if date.fromisoformat(s["date"]) > cutoff),
+        key=lambda s: s["date"],
+    )
 
     if not filtered:
         return "해당 조건의 운동 기록이 없습니다."
 
+    # 같은 날짜에 여러 종목을 한 세션(예: 상체 3종목)에 몰아서 하는 경우가
+    # 많아서, 날짜별로 묶어 보여준다 - 안 묶으면 같은 날짜가 줄마다 반복돼
+    # 가독성이 떨어진다 (특히 /status 화면에서 두드러짐)
     lines = []
+    current_date = None
     for s in filtered:
-        line = (
-            f"{s['date']} {s['exercise']}({s['category']}) "
-            f"{s['weight_kg']}kg x {s['sets']}세트 {s['reps']}회 · "
-            f"통증:{s['soreness_before_session']} · "
-            f"같은부위 마지막훈련후 {s['hours_since_last_same_category']}시간 경과"
+        if s["date"] != current_date:
+            current_date = s["date"]
+            lines.append(f"{current_date}")
+        lines.append(
+            f"  - {s['exercise']}({s['category']}) "
+            f"{s['weight_kg']}kg x {s['sets']}세트 {s['reps']}회"
+        )
+        detail = (
+            f"    · 통증:{s['soreness_before_session']} · "
+            f"마지막훈련후 {s['hours_since_last_same_category']}시간 경과"
         )
         if s.get("same_day_cardio_minutes"):
-            line += f" · 당일 유산소 {s['same_day_cardio_minutes']}분({s.get('cardio_intensity')})"
+            detail += f" · 당일 유산소 {s['same_day_cardio_minutes']}분({s.get('cardio_intensity')})"
         if s.get("pain_reported"):
-            line += f" · 통증호소: {s.get('note', '통증 있음')}"
-        lines.append(line)
+            detail += f" · 통증호소: {s.get('note', '통증 있음')}"
+        lines.append(detail)
     return "\n".join(lines)
+
+
+_WORKOUT_CATEGORIES = {"상체", "등", "하체"}
+_SORENESS_LEVELS = {"none", "mild", "strong"}
+
+
+@tool
+def log_workout_session(
+    exercise: str,
+    category: str,
+    weight_kg: float,
+    sets: int,
+    reps: list[int],
+    soreness_before_session: str = "none",
+    pain_reported: bool = False,
+    note: str = "",
+    same_day_cardio_minutes: int = 0,
+    cardio_intensity: str = "",
+    date_str: str = "",
+) -> str:
+    """운동 세션 하나를 기록에 추가한다.
+
+    category는 상체/등/하체 중 하나여야 한다. soreness_before_session은
+    none/mild/strong 중 하나(세션 시작 전 근육통 정도 - 사용자가 언급하지
+    않았으면 기본값 none을 쓴다). reps는 세트별 반복수 리스트로 sets 길이와
+    같아야 한다. hours_since_last_same_category는 같은 category의 직전
+    기록과 비교해 자동으로 계산한다 (같은 category 기록이 없으면 999시간으로
+    표시 - "충분히 오래됨"을 의미). date_str을 비우면 오늘 날짜로 저장하고,
+    사용자가 특정 날짜를 언급했으면(예: "9월 15일에 스쿼트 했었어") 'YYYY-MM-DD'
+    형식으로 변환해서 넘겨라.
+    """
+    if category not in _WORKOUT_CATEGORIES:
+        return f"category는 상체/등/하체 중 하나여야 합니다: {category}"
+    if soreness_before_session not in _SORENESS_LEVELS:
+        return f"soreness_before_session은 none/mild/strong 중 하나여야 합니다: {soreness_before_session}"
+    if len(reps) != sets:
+        return f"reps 리스트 길이({len(reps)})가 sets({sets})와 일치해야 합니다."
+
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str)
+        except ValueError:
+            return f"date_str은 YYYY-MM-DD 형식이어야 합니다: {date_str}"
+    else:
+        target_date = date.today()
+
+    with _write_lock:
+        sessions = _load_json("workout_history.json")
+
+        same_category_dates = [
+            date.fromisoformat(s["date"])
+            for s in sessions
+            if s["category"] == category and date.fromisoformat(s["date"]) < target_date
+        ]
+        if same_category_dates:
+            hours_since_last = int((target_date - max(same_category_dates)).total_seconds() // 3600)
+        else:
+            hours_since_last = 999
+
+        sessions.append({
+            "date": target_date.isoformat(),
+            "exercise": exercise,
+            "category": category,
+            "weight_kg": weight_kg,
+            "sets": sets,
+            "reps": reps,
+            "soreness_before_session": soreness_before_session,
+            "hours_since_last_same_category": hours_since_last,
+            "same_day_cardio_minutes": same_day_cardio_minutes,
+            "cardio_intensity": cardio_intensity or None,
+            "pain_reported": pain_reported,
+            "note": note,
+        })
+        _save_json("workout_history.json", sessions)
+    return (
+        f"{target_date.isoformat()} {exercise}({category}) {weight_kg}kg x {sets}세트 "
+        f"{reps}회 기록을 저장했습니다."
+    )
+
+
+@tool
+def delete_workout_session(exercise: str, date_str: str = "") -> str:
+    """이미 기록된 운동 세션 하나를 삭제한다.
+
+    사용자가 "아까 벤치프레스 기록한 거 취소해줘"처럼 잘못 기록됐거나 실제로
+    안 한 걸 지워달라고 하면 이 도구를 써라. date_str을 비우면 오늘 기록에서
+    찾는다. exercise는 정확히 일치해야 하며, 그 날짜에 같은 종목이 여러 번
+    기록돼 있으면(예: 같은 날 두 세트로 나눠 기록) 어느 것인지 특정할 수
+    없으니 실패 메시지를 반환한다 - 그 경우 사용자에게 확인하라.
+    """
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str).isoformat()
+        except ValueError:
+            return f"date_str은 YYYY-MM-DD 형식이어야 합니다: {date_str}"
+    else:
+        target_date = date.today().isoformat()
+
+    with _write_lock:
+        sessions = _load_json("workout_history.json")
+        matches = [s for s in sessions if s["date"] == target_date and s["exercise"] == exercise]
+        if not matches:
+            return f"{target_date} 기록에서 '{exercise}'을 찾지 못했습니다."
+        if len(matches) > 1:
+            return f"{target_date}에 '{exercise}' 기록이 여러 개입니다. 삭제할 하나를 특정할 수 없습니다."
+
+        sessions.remove(matches[0])
+        _save_json("workout_history.json", sessions)
+    return f"{target_date} 기록에서 '{exercise}' 세션을 삭제했습니다."
 
 
 @tool
@@ -84,13 +219,18 @@ def get_diet_history(kind: str = "diet", weeks: int = 4) -> str:
             return "식단 기록이 없습니다."
         latest_date = max(date.fromisoformat(d["date"]) for d in logs)
         cutoff = latest_date - timedelta(weeks=weeks)
-        recent = [d for d in logs if date.fromisoformat(d["date"]) > cutoff]
+        recent = sorted(
+            (d for d in logs if date.fromisoformat(d["date"]) > cutoff),
+            key=lambda d: d["date"],
+        )
         if not recent:
             return "해당 기간의 식단 기록이 없습니다."
-        return "\n".join(
-            f"{d['date']} 총 {d['total_kcal']}kcal ({', '.join(m['name'] for m in d['meals'])})"
-            for d in recent
-        )
+        lines = []
+        for d in recent:
+            lines.append(f"{d['date']} (총 {d['total_kcal']}kcal)")
+            for m in d["meals"]:
+                lines.append(f"  - {m['name']}")
+        return "\n".join(lines)
 
     if kind == "body_composition":
         points = _load_json("body_composition.json")
@@ -112,6 +252,141 @@ def get_diet_history(kind: str = "diet", weeks: int = 4) -> str:
         return "\n".join(lines)
 
     return "diet 또는 body_composition 중 하나를 지정하세요."
+
+
+@tool
+def log_meal(meal_name: str, kcal: int, date_str: str = "") -> str:
+    """먹은 끼니 하나를 식단 기록에 추가한다.
+
+    date_str을 비우면 오늘 날짜에 추가하고, 사용자가 특정 날짜를 언급했으면
+    (예: "어제 저녁에 라면 먹었어") 'YYYY-MM-DD' 형식으로 변환해서 넘겨라.
+    그 날짜 기록이 이미 있으면 끼니 목록에 추가하고 총 칼로리를 다시 계산하고,
+    없으면 새 날짜 항목을 만든다. kcal은 사용자가 직접 말해주지 않았으면
+    음식 종류로 대략 추정해서 넣어도 되지만, 추정값이라는 점을 답변에서
+    밝혀야 한다.
+    """
+    if not meal_name.strip():
+        return "meal_name이 비어 있습니다."
+    if kcal <= 0:
+        return f"kcal은 0보다 커야 합니다: {kcal}"
+
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str).isoformat()
+        except ValueError:
+            return f"date_str은 YYYY-MM-DD 형식이어야 합니다: {date_str}"
+    else:
+        target_date = date.today().isoformat()
+
+    with _write_lock:
+        logs = _load_json("diet_log.json")
+
+        entry = next((d for d in logs if d["date"] == target_date), None)
+        if entry is None:
+            entry = {"date": target_date, "meals": [], "total_kcal": 0}
+            logs.append(entry)
+
+        entry["meals"].append({"name": meal_name, "kcal": kcal})
+        entry["total_kcal"] = sum(m["kcal"] for m in entry["meals"])
+
+        _save_json("diet_log.json", logs)
+    return f"{target_date} 식단에 '{meal_name}'({kcal}kcal)을 추가했습니다. 그날 총 {entry['total_kcal']}kcal."
+
+
+@tool
+def update_meal(old_meal_name: str, new_meal_name: str, new_kcal: int, date_str: str = "") -> str:
+    """이미 기록된 끼니 하나의 이름·칼로리를 새 값으로 바꾼다 (새로 추가하지 않음).
+
+    사용자가 "아까 김치찌개 먹을 때 공깃밥도 같이 먹었어"처럼 이미 기록한
+    끼니에 뭔가를 더했다고 말하면, log_meal로 별도 항목을 새로 추가하지 말고
+    이 도구를 써라 - old_meal_name='김치찌개', new_meal_name='김치찌개 + 공깃밥',
+    new_kcal은 기존 칼로리에 추가분을 더한 값으로 호출한다. date_str을 비우면
+    오늘 기록에서 찾는다. old_meal_name은 부분 일치로 찾으며, 일치하는 끼니가
+    없거나 여러 개면 실패 메시지를 반환한다 - 그 경우 사용자에게 확인하거나
+    log_meal로 새로 추가할지 판단하라.
+    """
+    if not old_meal_name.strip() or not new_meal_name.strip():
+        return "old_meal_name과 new_meal_name은 비어 있을 수 없습니다."
+    if new_kcal <= 0:
+        return f"new_kcal은 0보다 커야 합니다: {new_kcal}"
+
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str).isoformat()
+        except ValueError:
+            return f"date_str은 YYYY-MM-DD 형식이어야 합니다: {date_str}"
+    else:
+        target_date = date.today().isoformat()
+
+    with _write_lock:
+        logs = _load_json("diet_log.json")
+        entry = next((d for d in logs if d["date"] == target_date), None)
+        if entry is None:
+            return f"{target_date} 기록이 없습니다."
+
+        # 정확히 이름이 같은 게 있으면 그것만 고른다 - 부분 일치만 쓰면
+        # "김치찌개"가 "김치찌개 + 공깃밥"에도 걸려서, 사용자가 아무리
+        # 명확하게 말해도 항상 여러 개로 걸리는 문제가 있었다.
+        matches = [m for m in entry["meals"] if m["name"] == old_meal_name]
+        if not matches:
+            matches = [m for m in entry["meals"] if old_meal_name in m["name"]]
+        if not matches:
+            return f"{target_date} 기록에서 '{old_meal_name}'을 찾지 못했습니다."
+        if len(matches) > 1:
+            names = ", ".join(m["name"] for m in matches)
+            return f"'{old_meal_name}'과 일치하는 끼니가 여러 개입니다: {names}. 더 구체적으로 지정하세요."
+
+        matches[0]["name"] = new_meal_name
+        matches[0]["kcal"] = new_kcal
+        entry["total_kcal"] = sum(m["kcal"] for m in entry["meals"])
+        _save_json("diet_log.json", logs)
+    return (
+        f"{target_date} 식단의 '{old_meal_name}'을 '{new_meal_name}'({new_kcal}kcal)으로 "
+        f"수정했습니다. 그날 총 {entry['total_kcal']}kcal."
+    )
+
+
+@tool
+def delete_meal(meal_name: str, date_str: str = "") -> str:
+    """이미 기록된 끼니 하나를 삭제한다.
+
+    사용자가 "아까 라면 먹었다고 한 거 취소해줘"처럼 잘못 기록됐거나 실제로
+    안 먹은 걸 지워달라고 하면 이 도구를 써라. date_str을 비우면 오늘
+    기록에서 찾는다. meal_name은 부분 일치로 찾으며, 일치하는 끼니가 없거나
+    여러 개면 실패 메시지를 반환하니 사용자에게 확인하라. 그날 마지막 끼니를
+    지우면 그 날짜 항목 자체도 함께 삭제된다.
+    """
+    if date_str:
+        try:
+            target_date = date.fromisoformat(date_str).isoformat()
+        except ValueError:
+            return f"date_str은 YYYY-MM-DD 형식이어야 합니다: {date_str}"
+    else:
+        target_date = date.today().isoformat()
+
+    with _write_lock:
+        logs = _load_json("diet_log.json")
+        entry = next((d for d in logs if d["date"] == target_date), None)
+        if entry is None:
+            return f"{target_date} 기록이 없습니다."
+
+        # update_meal과 동일한 이유로 정확히 일치하는 걸 먼저 찾는다.
+        matches = [m for m in entry["meals"] if m["name"] == meal_name]
+        if not matches:
+            matches = [m for m in entry["meals"] if meal_name in m["name"]]
+        if not matches:
+            return f"{target_date} 기록에서 '{meal_name}'을 찾지 못했습니다."
+        if len(matches) > 1:
+            names = ", ".join(m["name"] for m in matches)
+            return f"'{meal_name}'과 일치하는 끼니가 여러 개입니다: {names}. 더 구체적으로 지정하세요."
+
+        entry["meals"].remove(matches[0])
+        if entry["meals"]:
+            entry["total_kcal"] = sum(m["kcal"] for m in entry["meals"])
+        else:
+            logs.remove(entry)
+        _save_json("diet_log.json", logs)
+    return f"{target_date} 식단에서 '{matches[0]['name']}'을 삭제했습니다."
 
 
 _ACTIVITY_FACTORS = {"light": 1.2, "moderate": 1.4, "active": 1.6}
@@ -181,15 +456,23 @@ _PROFILE_ENUM_FIELDS = {
 }
 
 
+_GENDER_LABELS = {"male": "남성", "female": "여성"}
+_GOAL_LABELS = {"cutting": "커팅", "bulking": "벌킹", "maintain": "유지"}
+_ACTIVITY_LEVEL_LABELS = {"light": "가벼운 운동", "moderate": "중간 강도", "active": "고강도"}
+
+
 @tool
 def get_user_profile() -> str:
     """저장된 사용자 프로필(키·몸무게·나이·성별·목표·활동수준)을 그대로 보여준다."""
     profile = _load_json("user_profile.json")
+    gender = _GENDER_LABELS.get(profile["gender"], profile["gender"])
+    goal = _GOAL_LABELS.get(profile["goal"], profile["goal"])
+    activity_level = _ACTIVITY_LEVEL_LABELS.get(profile["activity_level"], profile["activity_level"])
     return (
         f"키 {profile['height_cm']}cm · 몸무게 {profile['weight_kg']}kg · "
-        f"나이 {profile['age']}세 · 성별 {profile['gender']} · "
-        f"목표 {profile['goal']} · 목표 근육량 {profile['target_muscle_mass_kg']}kg · "
-        f"활동수준 {profile['activity_level']}"
+        f"나이 {profile['age']}세 · 성별 {gender} · "
+        f"목표 {goal} · 목표 근육량 {profile['target_muscle_mass_kg']}kg · "
+        f"활동수준 {activity_level}"
     )
 
 
@@ -210,8 +493,6 @@ def update_user_profile(field: str, value: str) -> str:
         allowed = "/".join(sorted(_PROFILE_ENUM_FIELDS[field]))
         return f"{field}에는 {allowed} 중 하나만 입력할 수 있습니다: {value}"
 
-    profile = _load_json("user_profile.json")
-
     if field in _PROFILE_NUMERIC_FIELDS:
         try:
             value_to_store = float(value) if "." in value else int(value)
@@ -220,10 +501,10 @@ def update_user_profile(field: str, value: str) -> str:
     else:
         value_to_store = value
 
-    profile[field] = value_to_store
-    (DUMMY_DIR / "user_profile.json").write_text(
-        json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
+    with _write_lock:
+        profile = _load_json("user_profile.json")
+        profile[field] = value_to_store
+        _save_json("user_profile.json", profile)
     return f"{field}를 {value}로 업데이트했습니다."
 
 
